@@ -105,6 +105,7 @@ TARGETS += pstore
 TARGETS += ptrace
 TARGETS += openat2
 TARGETS += rdma
+TARGETS += readfile
 TARGETS += resctrl
 TARGETS += riscv
 TARGETS += rlimits
