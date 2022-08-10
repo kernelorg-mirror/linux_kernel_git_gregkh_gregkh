@@ -866,9 +866,11 @@ __SYSCALL(__NR_rseq_slice_yield, sys_rseq_slice_yield)
 /* fs/open.c */
 #define __NR_fchroot 472
 __SYSCALL(__NR_fchroot, sys_fchroot)
+#define __NR_readfile 473
+__SYSCALL(__NR_readfile, sys_readfile)
 
 #undef __NR_syscalls
-#define __NR_syscalls 473
+#define __NR_syscalls 474
 
 /*
  * 32 bit systems traditionally used different
