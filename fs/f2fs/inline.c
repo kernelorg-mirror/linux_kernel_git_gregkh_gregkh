@@ -234,11 +234,13 @@ int f2fs_convert_inline_inode(struct inode *inode)
 	if (err)
 		return err;
 
-	folio = f2fs_grab_cache_folio(inode->i_mapping, 0, false);
-	if (IS_ERR(folio))
-		return PTR_ERR(folio);
-
 	f2fs_lock_op(sbi, &lc);
+
+	folio = f2fs_grab_cache_folio(inode->i_mapping, 0, false);
+	if (IS_ERR(folio)) {
+		f2fs_unlock_op(sbi, &lc);
+		return PTR_ERR(folio);
+	}
 
 	ifolio = f2fs_get_inode_folio(sbi, inode->i_ino);
 	if (IS_ERR(ifolio)) {
