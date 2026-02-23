@@ -411,6 +411,7 @@ err_fini_rxtx:
 	mctp_usblib_rx_fini(&dev->rx);
 err_free_netdev:
 	free_netdev(netdev);
+	usb_put_dev(dev->usbdev);
 	return rc;
 }
 
