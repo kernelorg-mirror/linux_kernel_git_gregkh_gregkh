@@ -1959,6 +1959,7 @@ config AIO
 
 config IO_URING
 	bool "Enable IO uring support" if EXPERT
+	depends on MMU
 	select IO_WQ
 	default y
 	help
