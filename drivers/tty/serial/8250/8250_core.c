@@ -950,6 +950,9 @@ void serial8250_unregister_port(struct uart_8250_port *uart)
 
 	serial8250_em485_free(uart);
 
+	if (uart->overrun_backoff_time_ms)
+		cancel_delayed_work_sync(&uart->overrun_backoff);
+
 	uart_remove_one_port(&serial8250_reg, &uart->port);
 	if (serial8250_isa_devs) {
 		uart->port.flags &= ~UPF_BOOT_AUTOCONF;

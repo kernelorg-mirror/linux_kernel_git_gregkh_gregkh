@@ -786,6 +786,9 @@ static void omap_8250_shutdown(struct uart_port *port)
 
 	disable_irq_nosync(port->irq);
 
+	if (up->overrun_backoff_time_ms)
+		cancel_delayed_work_sync(&up->overrun_backoff);
+
 	serial8250_release_dma(up);
 	up->dma = NULL;
 

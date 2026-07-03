@@ -2497,6 +2497,9 @@ void serial8250_do_shutdown(struct uart_port *port)
 
 	synchronize_irq(port->irq);
 
+	if (up->overrun_backoff_time_ms)
+		cancel_delayed_work_sync(&up->overrun_backoff);
+
 	if (up->dma)
 		serial8250_release_dma(up);
 
