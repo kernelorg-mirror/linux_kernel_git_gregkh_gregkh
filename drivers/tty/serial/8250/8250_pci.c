@@ -1083,6 +1083,7 @@ static int pci_oxsemi_tornado_init(struct pci_dev *dev)
 	u8 __iomem *p;
 	unsigned long deviceID;
 	unsigned int  number_uarts = 0;
+	resource_size_t bar_len;
 
 	if (!pci_oxsemi_tornado_p(dev))
 		return 0;
@@ -1095,6 +1096,15 @@ static int pci_oxsemi_tornado_init(struct pci_dev *dev)
 	/* Tornado device */
 	if (deviceID == 0x07000200) {
 		number_uarts = ioread8(p + 4);
+
+		/* Cap against BAR0 size (Tornado layout: 0x1000 + n * 0x200) */
+		bar_len = pci_resource_len(dev, 0);
+		if (bar_len >= 0x1000)
+			number_uarts = min_t(unsigned int, number_uarts,
+					     (bar_len - 0x1000) / 0x200);
+		else
+			number_uarts = 0;
+
 		pci_dbg(dev, "%d ports detected on %s PCI Express device\n",
 			number_uarts,
 			dev->vendor == PCI_VENDOR_ID_ENDRUN ?
