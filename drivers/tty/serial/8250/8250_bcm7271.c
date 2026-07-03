@@ -315,7 +315,7 @@ static int brcmuart_arbitration(struct brcmuart_priv *priv, bool acquire)
 
 static void brcmuart_init_dma_hardware(struct brcmuart_priv *priv)
 {
-	u32 daddr;
+	dma_addr_t daddr;
 	u32 value;
 	int x;
 
