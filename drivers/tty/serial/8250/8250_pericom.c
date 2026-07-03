@@ -123,6 +123,9 @@ static int pericom8250_probe(struct pci_dev *pdev, const struct pci_device_id *i
 	for (i = 0; i < nr && i < maxnr; i++) {
 		unsigned int offset = (i == 3 && nr == 4) ? 0x38 : i * 0x8;
 
+		if (offset + 8 > pci_resource_len(pdev, bar))
+			break;
+
 		uart.port.iobase = pci_resource_start(pdev, bar) + offset;
 
 		dev_dbg(&pdev->dev, "Setup PCI port: port %lx, irq %d, type %d\n",
