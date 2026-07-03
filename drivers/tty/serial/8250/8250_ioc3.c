@@ -63,6 +63,7 @@ static int serial8250_ioc3_probe(struct platform_device *pdev)
 	if (IS_ERR(uport))
 		return PTR_ERR(uport);
 
+	data->line = line;
 	platform_set_drvdata(pdev, uport);
 	return 0;
 }
