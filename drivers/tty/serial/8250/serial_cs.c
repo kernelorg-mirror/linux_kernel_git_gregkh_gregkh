@@ -349,6 +349,11 @@ static int setup_serial(struct pcmcia_device *handle, struct serial_info *info,
 {
 	struct uart_8250_port uart;
 
+	if (info->ndev >= ARRAY_SIZE(info->line)) {
+		dev_err(&handle->dev, "no room for more serial ports\n");
+		return -EINVAL;
+	}
+
 	memset(&uart, 0, sizeof(uart));
 	uart.port.iobase = iobase;
 	uart.port.irq = irq;
