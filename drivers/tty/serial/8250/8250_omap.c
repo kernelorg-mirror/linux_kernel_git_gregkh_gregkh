@@ -975,7 +975,9 @@ static void __dma_rx_complete(void *param)
 	if (dmaengine_tx_status(dma->rxchan, dma->rx_cookie, &state) != DMA_COMPLETE)
 		return;
 
+	spin_lock(&priv->rx_dma_lock);
 	__dma_rx_do_complete(p);
+	spin_unlock(&priv->rx_dma_lock);
 	if (priv->throttled)
 		return;
 
