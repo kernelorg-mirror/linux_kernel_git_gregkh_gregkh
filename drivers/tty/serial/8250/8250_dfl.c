@@ -84,6 +84,10 @@ static int dfl_uart_get_params(struct dfl_device *dfl_dev, struct uart_8250_port
 		return dev_err_probe(dev, ret, "missing REG_LAYOUT param\n");
 
 	uart->port.regshift = FIELD_GET(DFHv1_PARAM_REG_LAYOUT_SHIFT, reg_layout);
+	if (uart->port.regshift > 4)
+		return dev_err_probe(dev, -EINVAL, "unsupported reg-shift %u\n",
+				     uart->port.regshift);
+
 	reg_width = FIELD_GET(DFHv1_PARAM_REG_LAYOUT_WIDTH, reg_layout);
 	switch (reg_width) {
 	case 4:
