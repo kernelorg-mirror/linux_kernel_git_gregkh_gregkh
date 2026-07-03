@@ -110,6 +110,7 @@ static int dfl_uart_probe(struct dfl_device *dfl_dev)
 {
 	struct device *dev = &dfl_dev->dev;
 	struct uart_8250_port uart = { };
+	resource_size_t min_size;
 	int ret;
 
 	uart.port.flags = UPF_IOREMAP;
@@ -119,6 +120,17 @@ static int dfl_uart_probe(struct dfl_device *dfl_dev)
 	ret = dfl_uart_get_params(dfl_dev, &uart);
 	if (ret < 0)
 		return dev_err_probe(dev, ret, "failed uart feature walk\n");
+
+	if (uart.port.regshift > 3)
+		return dev_err_probe(dev, -EINVAL,
+				     "unsupported regshift %u\n",
+				     uart.port.regshift);
+
+	min_size = (7 << uart.port.regshift) +
+		   ((uart.port.iotype == UPIO_MEM32) ? 4 : 2);
+	if (uart.port.mapsize < min_size)
+		return dev_err_probe(dev, -EINVAL,
+				     "MMIO resource too small for register layout\n");
 
 	if (dfl_dev->num_irqs == 1)
 		uart.port.irq = dfl_dev->irqs[0];
