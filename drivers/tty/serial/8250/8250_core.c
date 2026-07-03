@@ -956,7 +956,35 @@ void serial8250_unregister_port(struct uart_8250_port *uart)
 		uart->port.dev = &serial8250_isa_devs->dev;
 		uart->port.port_id = uart->port.line;
 		uart->capabilities = 0;
+
+		/*
+		 * Clear subdriver-owned state copied by
+		 * serial8250_register_8250_port() to prevent dangling
+		 * pointers after the original driver module is unloaded.
+		 */
+		uart->port.private_data = NULL;
+		uart->port.set_termios = NULL;
+		uart->port.set_ldisc = NULL;
+		uart->port.get_mctrl = NULL;
+		uart->port.set_mctrl = NULL;
+		uart->port.get_divisor = NULL;
+		uart->port.set_divisor = NULL;
+		uart->port.startup = NULL;
+		uart->port.shutdown = NULL;
+		uart->port.throttle = NULL;
+		uart->port.unthrottle = NULL;
+		uart->port.handle_break = NULL;
+		uart->port.rs485_config = NULL;
+		memset(&uart->port.rs485, 0, sizeof(uart->port.rs485));
+		memset(&uart->port.rs485_supported, 0,
+		       sizeof(uart->port.rs485_supported));
+		uart->gpios = NULL;
+		uart->dma = NULL;
+		uart->rs485_start_tx = NULL;
+		uart->rs485_stop_tx = NULL;
+
 		serial8250_init_port(uart);
+		serial8250_set_defaults(uart);
 		serial8250_apply_quirks(uart);
 		uart_add_one_port(&serial8250_reg, &uart->port);
 	} else {
