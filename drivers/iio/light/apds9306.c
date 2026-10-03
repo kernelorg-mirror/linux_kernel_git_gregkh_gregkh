@@ -462,7 +462,7 @@ static int apds9306_power_state(struct apds9306_data *data, bool state)
 static int apds9306_read_data(struct apds9306_data *data, int *val, int reg)
 {
 	struct device *dev = data->dev;
-	struct iio_dev *indio_dev = dev_to_iio_dev(dev);
+	struct iio_dev *indio_dev = dev_get_drvdata(dev);
 	struct apds9306_regfields *rf = &data->rf;
 	u64 ev_code;
 	int ret, delay, intg_time, intg_time_idx, repeat_rate_idx, int_src;
