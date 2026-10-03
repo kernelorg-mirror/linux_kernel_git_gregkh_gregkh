@@ -1064,7 +1064,6 @@ exit:
 
 	kfree(PageBuffer);
 
-	result = 0;
 	return result;
 }
 
