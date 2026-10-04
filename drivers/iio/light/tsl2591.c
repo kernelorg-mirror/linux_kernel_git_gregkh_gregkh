@@ -416,6 +416,13 @@ static int tsl2591_read_channel_data(struct iio_dev *indio_dev,
 
 		dev_dbg(&client->dev, "Counts Per Lux: %d\n", counts_per_lux);
 
+		/* No light at all: the formula below divides by als_ch0 */
+		if (!als_ch0) {
+			*val = 0;
+			*val2 = 0;
+			break;
+		}
+
 		/* Calculate lux value */
 		lux = ((als_ch0 - als_ch1) *
 		       (1000 - ((als_ch1 * 1000) / als_ch0))) / counts_per_lux;
