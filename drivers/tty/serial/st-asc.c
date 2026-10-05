@@ -262,8 +262,15 @@ static void asc_receive_chars(struct uart_port *port)
 	if (mode == ASC_CTL_MODE_8BIT || mode == ASC_CTL_MODE_8BIT_PAR)
 		ignore_pe = true;
 
-	if (irqd_is_wakeup_set(irq_get_irq_data(port->irq)))
-		pm_wakeup_event(tport->tty->dev, 0);
+	if (irqd_is_wakeup_set(irq_get_irq_data(port->irq))) {
+		struct tty_struct *tty = tty_port_tty_get(tport);
+
+		/* A console goes on receiving after the last close */
+		if (tty) {
+			pm_wakeup_event(tty->dev, 0);
+			tty_kref_put(tty);
+		}
+	}
 
 	while ((status = asc_in(port, ASC_STA)) & ASC_STA_RBF) {
 		c = asc_in(port, ASC_RXBUF) | ASC_RXBUF_DUMMY_RX;
