@@ -1900,8 +1900,15 @@ void serial8250_handle_irq_locked(struct uart_port *port, unsigned int iir)
 		struct irq_data *d;
 
 		d = irq_get_irq_data(port->irq);
-		if (d && irqd_is_wakeup_set(d))
-			pm_wakeup_event(tport->tty->dev, 0);
+		if (d && irqd_is_wakeup_set(d)) {
+			struct tty_struct *tty = tty_port_tty_get(tport);
+
+			/* A console goes on receiving after the last close */
+			if (tty) {
+				pm_wakeup_event(tty->dev, 0);
+				tty_kref_put(tty);
+			}
+		}
 		if (!up->dma || handle_rx_dma(up, iir))
 			status = serial8250_rx_chars(up, status);
 	}
