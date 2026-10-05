@@ -16,6 +16,7 @@
 #include <linux/interrupt.h>
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
+#include <linux/math64.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pm_runtime.h>
@@ -424,8 +425,13 @@ static int tsl2591_read_channel_data(struct iio_dev *indio_dev,
 		}
 
 		/* Calculate lux value */
-		lux = ((als_ch0 - als_ch1) *
-		       (1000 - ((als_ch1 * 1000) / als_ch0))) / counts_per_lux;
+		lux = (als_ch0 - als_ch1) *
+		      (1000 - ((als_ch1 * 1000) / als_ch0));
+		if (counts_per_lux)
+			lux /= counts_per_lux;
+		else	/* Less than one count per lux */
+			lux = div_s64((s64)lux * TSL2591_LUX_COEFFICIENT,
+				      int_time_fval * gain_multi);
 
 		dev_dbg(&client->dev, "Raw lux calculation: %d\n", lux);
 
