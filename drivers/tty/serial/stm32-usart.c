@@ -872,8 +872,15 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 		writel_relaxed(USART_ICR_WUCF,
 			       port->membase + ofs->icr);
 		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_WUFIE);
-		if (irqd_is_wakeup_set(irq_get_irq_data(port->irq)))
-			pm_wakeup_event(tport->tty->dev, 0);
+		if (irqd_is_wakeup_set(irq_get_irq_data(port->irq))) {
+			struct tty_struct *tty = tty_port_tty_get(tport);
+
+			/* A console stays set up after the last close */
+			if (tty) {
+				pm_wakeup_event(tty->dev, 0);
+				tty_kref_put(tty);
+			}
+		}
 		ret = IRQ_HANDLED;
 	}
 
