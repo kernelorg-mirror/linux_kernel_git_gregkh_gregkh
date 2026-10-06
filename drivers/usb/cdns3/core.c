@@ -504,36 +504,49 @@ int cdns_suspend(struct cdns *cdns)
 }
 EXPORT_SYMBOL_GPL(cdns_suspend);
 
+/**
+ * cdns_resume_role - switch the role if it has changed while the power was off
+ * @cdns: controller
+ *
+ * Stopping and starting a role sleeps, so this has to be called before
+ * cdns->lock is taken for cdns_resume().
+ *
+ * Returns 1 if the role has been switched: it has been started from scratch
+ * and must not be resumed. 0 if there was nothing to do, negative errno if the
+ * switch has failed.
+ */
+int cdns_resume_role(struct cdns *cdns)
+{
+	int ret;
+
+	if (cdns->role_sw || !cdns_power_is_lost(cdns))
+		return 0;
+
+	if (cdns_hw_role_state_machine(cdns) == cdns->role)
+		return 0;
+
+	ret = cdns_hw_role_switch(cdns);
+
+	return ret ? ret : 1;
+}
+EXPORT_SYMBOL_GPL(cdns_resume_role);
+
 int cdns_resume(struct cdns *cdns)
 {
 	bool power_lost = cdns_power_is_lost(cdns);
-	enum usb_role real_role;
-	bool role_changed = false;
 	int ret = 0;
 
 	if (power_lost) {
-		if (!cdns->role_sw) {
-			real_role = cdns_hw_role_state_machine(cdns);
-			if (real_role != cdns->role) {
-				ret = cdns_hw_role_switch(cdns);
-				if (ret)
-					return ret;
-				role_changed = true;
-			}
-		}
+		if (cdns->role == USB_ROLE_HOST)
+			ret = cdns_drd_host_on(cdns);
+		else if (cdns->role == USB_ROLE_DEVICE)
+			ret = cdns_drd_gadget_on(cdns);
 
-		if (!role_changed) {
-			if (cdns->role == USB_ROLE_HOST)
-				ret = cdns_drd_host_on(cdns);
-			else if (cdns->role == USB_ROLE_DEVICE)
-				ret = cdns_drd_gadget_on(cdns);
-
-			if (ret)
-				return ret;
-		}
+		if (ret)
+			return ret;
 	}
 
-	if (!role_changed && cdns->roles[cdns->role]->resume)
+	if (cdns->roles[cdns->role]->resume)
 		cdns->roles[cdns->role]->resume(cdns, power_lost);
 
 	return 0;

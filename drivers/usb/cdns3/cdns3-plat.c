@@ -268,7 +268,7 @@ static int cdns3_controller_suspend(struct device *dev, pm_message_t msg)
 static int cdns3_controller_resume(struct device *dev, pm_message_t msg)
 {
 	struct cdns *cdns = dev_get_drvdata(dev);
-	int ret;
+	int ret, role_changed;
 	unsigned long flags;
 
 	if (!cdns->in_lpm)
@@ -292,8 +292,12 @@ static int cdns3_controller_resume(struct device *dev, pm_message_t msg)
 
 	cdns3_set_platform_suspend(cdns->dev, false, false);
 
+	/* It resumes the device, which cannot be done from runtime resume */
+	role_changed = PMSG_IS_AUTO(msg) ? 0 : cdns_resume_role(cdns);
+
 	spin_lock_irqsave(&cdns->lock, flags);
-	cdns_resume(cdns);
+	if (!role_changed)
+		cdns_resume(cdns);
 	cdns->in_lpm = false;
 	spin_unlock_irqrestore(&cdns->lock, flags);
 	cdns_set_active(cdns, !PMSG_IS_AUTO(msg));
