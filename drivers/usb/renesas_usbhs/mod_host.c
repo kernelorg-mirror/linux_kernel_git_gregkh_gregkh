@@ -987,7 +987,7 @@ static int usbhsh_urb_enqueue(struct usb_hcd *hcd,
 		if (!new_udev) {
 			ret = -EIO;
 			dev_err(dev, "device attach failed\n");
-			goto usbhsh_urb_enqueue_error_not_linked;
+			goto usbhsh_urb_enqueue_error_unlink;
 		}
 	}
 
@@ -1020,14 +1020,22 @@ static int usbhsh_urb_enqueue(struct usb_hcd *hcd,
 		ret = usbhsh_dcp_queue_push(hcd, urb, mem_flags);
 	else
 		ret = usbhsh_queue_push(hcd, urb, mem_flags);
+	if (ret < 0) {
+		usbhsh_pipe_detach(hpriv, usbhsh_ep_to_uep(ep));
+		goto usbhsh_urb_enqueue_error_unlink;
+	}
 
-	return ret;
+	return 0;
 
 usbhsh_urb_enqueue_error_free_endpoint:
 	usbhsh_endpoint_detach(hpriv, ep);
 usbhsh_urb_enqueue_error_free_device:
 	if (new_udev)
 		usbhsh_device_detach(hpriv, new_udev);
+usbhsh_urb_enqueue_error_unlink:
+	usbhs_lock(priv, flags);
+	usb_hcd_unlink_urb_from_ep(hcd, urb);
+	usbhs_unlock(priv, flags);
 usbhsh_urb_enqueue_error_not_linked:
 
 	dev_dbg(dev, "%s error\n", __func__);
