@@ -92,13 +92,19 @@ static int it5205_switch_set(struct typec_switch_dev *sw, enum typec_orientation
 static int it5205_mux_set(struct typec_mux_dev *mux, struct typec_mux_state *state)
 {
 	struct it5205 *it = typec_mux_get_drvdata(mux);
+	unsigned long mode = state->mode;
 	u8 val;
 
-	if (state->mode >= TYPEC_STATE_MODAL &&
-	    state->alt->svid != USB_TYPEC_DP_SID)
-		return -EINVAL;
+	if (mode >= TYPEC_STATE_MODAL) {
+		/* USB and accessory modes: not the DP pin assignments */
+		if (!state->alt)
+			mode = mode == TYPEC_MODE_USB3 ? TYPEC_STATE_USB :
+							 TYPEC_STATE_SAFE;
+		else if (state->alt->svid != USB_TYPEC_DP_SID)
+			return -EINVAL;
+	}
 
-	switch (state->mode) {
+	switch (mode) {
 	case TYPEC_STATE_USB:
 		val = IT5205_USB;
 		break;
