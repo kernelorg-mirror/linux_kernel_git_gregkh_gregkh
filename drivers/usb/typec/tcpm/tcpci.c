@@ -715,17 +715,34 @@ static int tcpci_init(struct tcpc_dev *tcpc)
 	return 0;
 }
 
+/*
+ * An edge triggered ALERT# does not fire again while an alert is pending, so
+ * don't give up after one failed transfer. No alert if it cannot be read.
+ */
+static u16 tcpci_read_alert(struct tcpci *tcpci)
+{
+	u16 status;
+	int i;
+
+	for (i = 0; i < 3; i++)
+		if (!tcpci_read16(tcpci, TCPC_ALERT, &status))
+			return status;
+
+	return 0;
+}
+
 irqreturn_t tcpci_irq(struct tcpci *tcpci)
 {
 	u16 status;
 	int ret;
-	int irq_ret;
+	int irq_ret = 0;
 	unsigned int raw;
 
-	tcpci_read16(tcpci, TCPC_ALERT, &status);
-	irq_ret = status & tcpci->alert_mask;
+	status = tcpci_read_alert(tcpci);
 
 process_status:
+	irq_ret |= status & tcpci->alert_mask;
+
 	/*
 	 * Clear alert status for everything except RX_STATUS, which shouldn't
 	 * be cleared until we have successfully retrieved message.
@@ -738,12 +755,12 @@ process_status:
 		tcpm_cc_change(tcpci->port);
 
 	if (status & TCPC_ALERT_POWER_STATUS) {
-		regmap_read(tcpci->regmap, TCPC_POWER_STATUS_MASK, &raw);
+		ret = regmap_read(tcpci->regmap, TCPC_POWER_STATUS_MASK, &raw);
 		/*
 		 * If power status mask has been reset, then the TCPC
 		 * has reset.
 		 */
-		if (raw == 0xff)
+		if (!ret && raw == 0xff)
 			tcpm_tcpc_reset(tcpci->port);
 		else
 			tcpm_vbus_change(tcpci->port);
@@ -755,7 +772,10 @@ process_status:
 		enum tcpm_transmit_type rx_type;
 		u16 header;
 
-		regmap_read(tcpci->regmap, TCPC_RX_BYTE_CNT, &cnt);
+		ret = regmap_read(tcpci->regmap, TCPC_RX_BYTE_CNT, &cnt);
+		if (ret)
+			goto rx_done;
+
 		/*
 		 * 'cnt' corresponds to READABLE_BYTE_COUNT in section 4.4.14
 		 * of the TCPCI spec [Rev 2.0 Ver 1.0 October 2017] and is
@@ -767,26 +787,36 @@ process_status:
 		else
 			payload_cnt = 0;
 
-		tcpci_read16(tcpci, TCPC_RX_HDR, &header);
+		ret = tcpci_read16(tcpci, TCPC_RX_HDR, &header);
+		if (ret)
+			goto rx_done;
+
 		msg.header = cpu_to_le16(header);
 
 		if (WARN_ON(payload_cnt > sizeof(msg.payload)))
 			payload_cnt = sizeof(msg.payload);
 
-		if (payload_cnt > 0)
-			regmap_raw_read(tcpci->regmap, TCPC_RX_DATA,
-					&msg.payload, payload_cnt);
+		if (payload_cnt > 0) {
+			ret = regmap_raw_read(tcpci->regmap, TCPC_RX_DATA,
+					      &msg.payload, payload_cnt);
+			if (ret)
+				goto rx_done;
+		}
 
 		ret = regmap_read(tcpci->regmap, TCPC_RX_BUF_FRAME_TYPE, &rx_type);
-		if (ret)
-			return ret;
 
-		/* Read complete, clear RX status alert bit */
+rx_done:
+		/*
+		 * Read complete, clear RX status alert bit. Also if the message
+		 * could not be read: it is dropped, ALERT# must be released.
+		 */
 		tcpci_write16(tcpci, TCPC_ALERT, TCPC_ALERT_RX_STATUS);
 
-		rx_type &= TCPC_RX_BUF_FRAME_TYPE_MASK;
-		if (tcpci->rx_type_mask & BIT(rx_type))
-			tcpm_pd_receive(tcpci->port, &msg, rx_type);
+		if (!ret) {
+			rx_type &= TCPC_RX_BUF_FRAME_TYPE_MASK;
+			if (tcpci->rx_type_mask & BIT(rx_type))
+				tcpm_pd_receive(tcpci->port, &msg, rx_type);
+		}
 	}
 
 	if (tcpci->data->vbus_vsafe0v && (status & TCPC_ALERT_EXTENDED_STATUS)) {
@@ -805,7 +835,7 @@ process_status:
 	else if (status & TCPC_ALERT_TX_FAILED)
 		tcpm_pd_transmit_complete(tcpci->port, TCPC_TX_FAILED);
 
-	tcpci_read16(tcpci, TCPC_ALERT, &status);
+	status = tcpci_read_alert(tcpci);
 
 	if (status & tcpci->alert_mask)
 		goto process_status;
