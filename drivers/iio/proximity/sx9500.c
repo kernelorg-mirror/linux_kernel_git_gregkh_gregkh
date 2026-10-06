@@ -853,15 +853,15 @@ static const struct acpi_gpio_mapping acpi_sx9500_gpios[] = {
 	{ }
 };
 
-static void sx9500_gpio_probe(struct i2c_client *client,
-			      struct sx9500_data *data)
+static int sx9500_gpio_probe(struct i2c_client *client,
+			     struct sx9500_data *data)
 {
 	struct gpio_desc *gpiod_int;
 	struct device *dev;
 	int ret;
 
 	if (!client)
-		return;
+		return 0;
 
 	dev = &client->dev;
 
@@ -871,6 +871,8 @@ static void sx9500_gpio_probe(struct i2c_client *client,
 
 	if (client->irq <= 0) {
 		gpiod_int = devm_gpiod_get(dev, "interrupt", GPIOD_IN);
+		if (PTR_ERR(gpiod_int) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
 		if (IS_ERR(gpiod_int))
 			dev_err(dev, "gpio get irq failed\n");
 		else
@@ -878,10 +880,14 @@ static void sx9500_gpio_probe(struct i2c_client *client,
 	}
 
 	data->gpiod_rst = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	if (PTR_ERR(data->gpiod_rst) == -EPROBE_DEFER)
+		return -EPROBE_DEFER;
 	if (IS_ERR(data->gpiod_rst)) {
 		dev_warn(dev, "gpio get reset pin failed\n");
 		data->gpiod_rst = NULL;
 	}
+
+	return 0;
 }
 
 static int sx9500_probe(struct i2c_client *client)
@@ -911,7 +917,9 @@ static int sx9500_probe(struct i2c_client *client)
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	i2c_set_clientdata(client, indio_dev);
 
-	sx9500_gpio_probe(client, data);
+	ret = sx9500_gpio_probe(client, data);
+	if (ret)
+		return ret;
 
 	ret = sx9500_init_device(indio_dev);
 	if (ret < 0)
