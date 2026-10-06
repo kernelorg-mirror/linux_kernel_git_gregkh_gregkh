@@ -947,10 +947,7 @@ void serial8250_unregister_port(struct uart_8250_port *uart)
 {
 	guard(mutex)(&serial_mutex);
 
-	if (uart->em485) {
-		guard(uart_port_lock_irqsave)(&uart->port);
-		serial8250_em485_destroy(uart);
-	}
+	serial8250_em485_free(uart);
 
 	uart_remove_one_port(&serial8250_reg, &uart->port);
 	if (serial8250_isa_devs) {

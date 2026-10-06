@@ -235,6 +235,7 @@ int serial8250_em485_config(struct uart_port *port, struct ktermios *termios,
 void serial8250_em485_start_tx(struct uart_8250_port *p, bool toggle_ier);
 void serial8250_em485_stop_tx(struct uart_8250_port *p, bool toggle_ier);
 void serial8250_em485_destroy(struct uart_8250_port *p);
+void serial8250_em485_free(struct uart_8250_port *p);
 extern struct serial_rs485 serial8250_em485_supported;
 
 /* MCR <-> TIOCM conversion */

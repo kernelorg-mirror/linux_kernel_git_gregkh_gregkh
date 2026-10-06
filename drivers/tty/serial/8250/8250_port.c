@@ -574,15 +574,22 @@ static int serial8250_em485_init(struct uart_8250_port *p)
 	if (p->em485)
 		goto deassert_rts;
 
-	p->em485 = kmalloc_obj(struct uart_8250_em485, GFP_ATOMIC);
-	if (!p->em485)
-		return -ENOMEM;
+	if (p->em485_idle) {
+		p->em485 = p->em485_idle;
+		p->em485_idle = NULL;
+	} else {
+		p->em485 = kmalloc_obj(struct uart_8250_em485, GFP_ATOMIC);
+		if (!p->em485)
+			return -ENOMEM;
 
-	hrtimer_setup(&p->em485->stop_tx_timer, &serial8250_em485_handle_stop_tx, CLOCK_MONOTONIC,
-		      HRTIMER_MODE_REL);
-	hrtimer_setup(&p->em485->start_tx_timer, &serial8250_em485_handle_start_tx, CLOCK_MONOTONIC,
-		      HRTIMER_MODE_REL);
-	p->em485->port = p;
+		hrtimer_setup(&p->em485->stop_tx_timer,
+			      &serial8250_em485_handle_stop_tx, CLOCK_MONOTONIC,
+			      HRTIMER_MODE_REL);
+		hrtimer_setup(&p->em485->start_tx_timer,
+			      &serial8250_em485_handle_start_tx, CLOCK_MONOTONIC,
+			      HRTIMER_MODE_REL);
+		p->em485->port = p;
+	}
 	p->em485->active_timer = NULL;
 	p->em485->tx_stopped = true;
 
@@ -604,6 +611,11 @@ deassert_rts:
  *	The function is supposed to be called from .rs485_config callback
  *	or from any other callback protected with p->port.lock spinlock.
  *
+ *	The handlers of the timers take that lock, so they cannot be waited for
+ *	here. One which is running does nothing, as no timer is active any more.
+ *	The memory is kept for the next serial8250_em485_init() and freed by
+ *	serial8250_em485_free().
+ *
  *	See also serial8250_em485_init()
  */
 void serial8250_em485_destroy(struct uart_8250_port *p)
@@ -611,13 +623,39 @@ void serial8250_em485_destroy(struct uart_8250_port *p)
 	if (!p->em485)
 		return;
 
-	hrtimer_cancel(&p->em485->start_tx_timer);
-	hrtimer_cancel(&p->em485->stop_tx_timer);
+	hrtimer_try_to_cancel(&p->em485->start_tx_timer);
+	hrtimer_try_to_cancel(&p->em485->stop_tx_timer);
+	p->em485->active_timer = NULL;
 
-	kfree(p->em485);
+	p->em485_idle = p->em485;
 	p->em485 = NULL;
 }
 EXPORT_SYMBOL_GPL(serial8250_em485_destroy);
+
+/**
+ *	serial8250_em485_free() - release the rs485 emulation of a port
+ *	@p:	uart_8250_port port instance
+ *
+ *	Must be called without p->port.lock, as it waits for the timers.
+ */
+void serial8250_em485_free(struct uart_8250_port *p)
+{
+	struct uart_8250_em485 *em485;
+
+	scoped_guard(uart_port_lock_irqsave, &p->port) {
+		serial8250_em485_destroy(p);
+		em485 = p->em485_idle;
+		p->em485_idle = NULL;
+	}
+
+	if (!em485)
+		return;
+
+	hrtimer_cancel(&em485->start_tx_timer);
+	hrtimer_cancel(&em485->stop_tx_timer);
+	kfree(em485);
+}
+EXPORT_SYMBOL_GPL(serial8250_em485_free);
 
 struct serial_rs485 serial8250_em485_supported = {
 	.flags = SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND |
