@@ -349,8 +349,11 @@ static int adxl367_set_act_threshold(struct adxl367_state *st,
 		return ret;
 
 	ret = _adxl367_set_act_threshold(st, act, threshold);
-	if (ret)
+	if (ret) {
+		/* Leave standby also if the value was refused */
+		adxl367_set_measure_en(st, true);
 		return ret;
+	}
 
 	return adxl367_set_measure_en(st, true);
 }
@@ -482,6 +485,12 @@ static int adxl367_set_range(struct iio_dev *indio_dev,
 	int ret;
 
 	guard(mutex)(&st->lock);
+
+	/* The thresholds are rescaled: see that they fit before any change */
+	if (max(st->act_threshold, st->inact_threshold) *
+	    adxl367_range_scale_factor_tbl[st->range] /
+	    adxl367_range_scale_factor_tbl[range] > ADXL367_THRESH_MAX)
+		return -EINVAL;
 
 	ret = adxl367_set_measure_en(st, false);
 	if (ret)
