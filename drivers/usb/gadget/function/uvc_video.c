@@ -770,6 +770,10 @@ int uvcg_video_enable(struct uvc_video *video)
 		return -ENODEV;
 	}
 
+	/* Set while the host has selected the streaming alternate setting. */
+	if (!video->ep->desc)
+		return -ENODEV;
+
 	/*
 	 * Safe to access request related fields without req_lock because
 	 * this is the only thread currently active, and no other
