@@ -465,6 +465,7 @@ static void sg_complete(struct urb *urb)
 	unsigned long flags;
 	struct usb_sg_request *io = urb->context;
 	int status = urb->status;
+	bool done;
 
 	spin_lock_irqsave(&io->lock, flags);
 
@@ -520,13 +521,16 @@ static void sg_complete(struct urb *urb)
 		spin_lock_irqsave(&io->lock, flags);
 	}
 
-	/* on the last completion, signal usb_sg_wait() */
 	io->bytes += urb->actual_length;
-	io->count--;
-	if (!io->count)
-		complete(&io->complete);
-
+	done = !--io->count;
 	spin_unlock_irqrestore(&io->lock, flags);
+
+	/*
+	 * On the last completion, signal usb_sg_wait().  Its caller may free
+	 * or reuse the request as soon as it returns, so this comes last.
+	 */
+	if (done)
+		complete(&io->complete);
 }
 
 
@@ -753,9 +757,16 @@ void usb_sg_wait(struct usb_sg_request *io)
 		if (retval && (io->status == 0 || io->status == -ECONNRESET))
 			io->status = retval;
 	}
-	io->count -= entries - i;
-	if (io->count == 0)
-		complete(&io->complete);
+	/*
+	 * Whoever brings the count to zero calls complete(), once, after he has
+	 * dropped the lock. If all URBs were submitted this is not us, even if
+	 * the count is zero by now.
+	 */
+	if (i < entries) {
+		io->count -= entries - i;
+		if (io->count == 0)
+			complete(&io->complete);
+	}
 	spin_unlock_irq(&io->lock);
 
 	/* OK, yes, this could be packaged as non-blocking.
@@ -780,6 +791,7 @@ void usb_sg_cancel(struct usb_sg_request *io)
 {
 	unsigned long flags;
 	int i, retval;
+	bool done;
 
 	spin_lock_irqsave(&io->lock, flags);
 	if (io->status || io->count == 0) {
@@ -804,10 +816,12 @@ void usb_sg_cancel(struct usb_sg_request *io)
 	}
 
 	spin_lock_irqsave(&io->lock, flags);
-	io->count--;
-	if (!io->count)
-		complete(&io->complete);
+	done = !--io->count;
 	spin_unlock_irqrestore(&io->lock, flags);
+
+	/* Don't touch the request after this, see sg_complete() */
+	if (done)
+		complete(&io->complete);
 }
 EXPORT_SYMBOL_GPL(usb_sg_cancel);
 
