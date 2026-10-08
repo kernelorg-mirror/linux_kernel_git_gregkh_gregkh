@@ -3278,6 +3278,38 @@ static void usb_unlock_port(struct usb_port *port_dev)
 	__release(&port_dev->status_lock);
 }
 
+/**
+ * usb_lock_device_port - lock the port which a device is connected to
+ * @udev: a registered device, locked by the caller
+ *
+ * usb_reset_and_verify_device() runs with the port lock, also where it is
+ * called from an autoresume handler, without the device lock. This keeps it
+ * away without resuming the device.
+ *
+ * The hub removes its ports after usb_disconnect() has unregistered the
+ * child, so the caller has to make sure that this has not finished.
+ *
+ * Return: the port for usb_unlock_device_port(), NULL for a root hub.
+ */
+struct usb_port *usb_lock_device_port(struct usb_device *udev)
+{
+	struct usb_hub *hub = usb_hub_to_struct_hub(udev->parent);
+	struct usb_port *port_dev;
+
+	if (!hub)
+		return NULL;
+
+	port_dev = hub->ports[udev->portnum - 1];
+	mutex_lock(&port_dev->status_lock);
+	return port_dev;
+}
+
+void usb_unlock_device_port(struct usb_port *port_dev)
+{
+	if (port_dev)
+		mutex_unlock(&port_dev->status_lock);
+}
+
 #ifdef	CONFIG_PM
 
 /* Check if a port is suspended(USB2.0 port) or in U3 state(USB3.0 port) */

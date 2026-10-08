@@ -901,12 +901,15 @@ bos_descriptors_read(struct file *filp, struct kobject *kobj,
 	struct usb_device *udev = to_usb_device(dev);
 	struct usb_host_bos *bos;
 	struct usb_bos_descriptor *desc;
+	struct usb_port *port_dev;
 	size_t desclen, n = 0;
 	int rc;
 
 	rc = usb_lock_device_interruptible(udev);
 	if (rc < 0)
 		return -EINTR;
+	/* A reset-resume replaces udev->bos without the device lock */
+	port_dev = usb_lock_device_port(udev);
 	bos = udev->bos;
 	if (bos) {
 		desc = bos->desc;
@@ -916,6 +919,7 @@ bos_descriptors_read(struct file *filp, struct kobject *kobj,
 			memcpy(buf, (void *) desc + off, n);
 		}
 	}
+	usb_unlock_device_port(port_dev);
 	usb_unlock_device(udev);
 	return n;
 }
